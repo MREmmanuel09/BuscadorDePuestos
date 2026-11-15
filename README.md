@@ -1,6 +1,6 @@
 # Buscador de Puestos — Soporte TI / Redes
 
-[![CI](https://github.com/MREmmanuel09/BucadorDePuestos/actions/workflows/ci.yml/badge.svg)](https://github.com/MREmmanuel09/BucadorDePuestos/actions/workflows/ci.yml)
+[![CI](https://github.com/MREmmanuel09/BuscadorDePuestos/actions/workflows/ci.yml/badge.svg)](https://github.com/MREmmanuel09/BuscadorDePuestos/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 
