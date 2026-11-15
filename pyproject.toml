@@ -1,0 +1,27 @@
+[project]
+name = "buscador-de-puestos"
+version = "0.2.0"
+description = "Buscador de ofertas de soporte TI y redes con puntaje de compatibilidad."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[project.optional-dependencies]
+dev = ["ruff>=0.6", "coverage>=7"]
+packaging = ["pyinstaller>=6"]
+cv = ["reportlab>=4"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E9", "F"]
+
+[tool.coverage.run]
+source = ["buscador"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

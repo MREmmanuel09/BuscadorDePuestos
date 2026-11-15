@@ -13,7 +13,9 @@ sys.path.insert(0, BASE)
 if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
+import bloqueo
 from main import (
+    DATA,
     OFERTAS_PATH,
     cargar_config,
     cargar_ofertas,
@@ -143,10 +145,11 @@ if __name__ == "__main__":
     parser.add_argument("--dias", type=int, help="Purgar ofertas con mas de N dias y salir")
     args = parser.parse_args()
     try:
-        if args.dias is not None:
-            purgar(args.dias)
-        else:
-            menu()
+        with bloqueo.proceso(DATA, "buscador"):
+            if args.dias is not None:
+                purgar(args.dias)
+            else:
+                menu()
     except Exception:
         import traceback
 

@@ -14,20 +14,37 @@ UA = {
 
 CTX = ssl.create_default_context()
 
+# Cache de paginas de la corrida actual: evita descargar dos veces la misma
+# URL (por ejemplo FindJob24h repetido entre corridas del mismo proceso).
+_CACHE = {}
+_CACHE_MAX = 300
+
+
+def limpiar_cache():
+    """Vacia la cache de paginas; se llama al iniciar cada corrida del buscador."""
+    _CACHE.clear()
+
 
 def descargar(url, timeout=30, intentos=3):
     """Descarga una pagina y devuelve (codigo HTTP, url final, HTML).
 
     Reintenta hasta 'intentos' veces con espera creciente (1.5s, 3s...) ante
     timeouts, errores de red y respuestas 5xx; los 4xx se propagan de inmediato
-    para no reintentar algo que no existe (p. ej. un 404).
+    para no reintentar algo que no existe (p. ej. un 404). Dentro de una misma
+    corrida, la misma URL se sirve de la cache.
     """
+    if url in _CACHE:
+        return _CACHE[url]
     ultimo_error = None
     for intento in range(1, intentos + 1):
         req = urllib.request.Request(url, headers=UA)
         try:
             with urllib.request.urlopen(req, timeout=timeout, context=CTX) as r:
-                return r.status, r.geturl(), r.read().decode("utf-8", "replace")
+                resultado = (r.status, r.geturl(), r.read().decode("utf-8", "replace"))
+                if len(_CACHE) >= _CACHE_MAX:
+                    _CACHE.clear()
+                _CACHE[url] = resultado
+                return resultado
         except urllib.error.HTTPError as e:
             if 400 <= e.code < 500:
                 raise

@@ -13,4 +13,7 @@ buscador/config.json
 # --- Python / sistema ---
 __pycache__/
 *.pyc
+.ruff_cache/
+.coverage
+htmlcov/
 Thumbs.db

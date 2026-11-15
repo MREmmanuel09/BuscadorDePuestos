@@ -5,6 +5,7 @@ import re
 import urllib.parse
 
 from .comun import fetch, pausar
+from consultas import consultas
 
 PLANTILLA = (
     "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
@@ -30,7 +31,7 @@ def buscar(cfg):
     pausa = max(cfg.get("pausa_segundos", 0.7), 1.0)
     paginas = int(cfg.get("max_paginas_por_busqueda", 1))
     ubicaciones = cfg.get("linkedin_ubicaciones", ["Costa Rica"])
-    for consulta in cfg.get("palabras_clave_busqueda", []):
+    for consulta in consultas(cfg, "LinkedIn"):
         kw = urllib.parse.quote(consulta)
         for loc in ubicaciones:
             for pagina in range(paginas):

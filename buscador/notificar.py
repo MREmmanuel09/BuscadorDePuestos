@@ -10,6 +10,8 @@ import ssl
 import subprocess
 from email.message import EmailMessage
 
+import secretos
+
 
 def toast(titulo, mensaje):
     """Muestra una notificación de Windows (aviso de escritorio).
@@ -46,7 +48,9 @@ def enviar_correo(correo_cfg, asunto, cuerpo_html):
     if not correo_cfg.get("activo"):
         return False
     usuario = correo_cfg.get("usuario", "")
-    clave = correo_cfg.get("clave_app", "")
+    clave = correo_cfg.get("clave_app", "") or secretos.descifrar(
+        correo_cfg.get("clave_app_cifrada", "")
+    )
     destino = correo_cfg.get("destino", "") or usuario
     if not usuario or not clave:
         return False

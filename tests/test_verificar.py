@@ -38,7 +38,8 @@ class BasePrueba(unittest.TestCase):
         """Apunta las rutas de main a un directorio temporal."""
         self.tmp = tempfile.mkdtemp(prefix="verificar_test_")
         claves = ("DATA", "CONFIG_PATH", "EJEMPLO_CONFIG_PATH", "VISTAS_PATH",
-                  "OFERTAS_PATH", "REPORTE_PATH", "LOG_PATH", "NEGRA_PATH")
+                  "OFERTAS_PATH", "REPORTE_PATH", "LOG_PATH", "NEGRA_PATH",
+                  "VERIFICADO_PATH")
         self._originales = {c: getattr(main, c) for c in claves}
         main.DATA = self.tmp
         main.CONFIG_PATH = os.path.join(self.tmp, "config.json")
@@ -48,6 +49,7 @@ class BasePrueba(unittest.TestCase):
         main.REPORTE_PATH = os.path.join(self.tmp, "reporte.html")
         main.LOG_PATH = os.path.join(self.tmp, "historial.log")
         main.NEGRA_PATH = os.path.join(self.tmp, "lista_negra.json")
+        main.VERIFICADO_PATH = os.path.join(self.tmp, "verificado.json")
 
     def tearDown(self):
         """Restaura las rutas originales y borra el temporal."""
@@ -183,6 +185,28 @@ class PruebaVerificarOfertas(BasePrueba):
         restantes = main.cargar_ofertas()
         self.assertEqual([o["titulo"] for o in restantes], ["Viva"])
         self.assertIn("https://x.com/c", main.cargar_lista_negra())
+
+    def test_no_reverifica_lo_revisado_hoy(self):
+        """Una oferta viva ya verificada hoy no se vuelve a descargar."""
+        main.guardar_ofertas([
+            {"fecha": "2000-01-01", "fuente": "LinkedIn", "titulo": "Viva",
+             "ubicacion": "Alajuela", "empresa": "E", "url": "https://x.com/v",
+             "estado_envio": ""},
+        ])
+        llamadas = []
+
+        def obtener_fn(url):
+            """Descarga falsa que cuenta cuantas veces se pide la pagina."""
+            llamadas.append(url)
+            return _ok(_html())
+
+        _, revisadas = verificar.verificar_ofertas(main.cargar_config(), obtener_fn=obtener_fn)
+        self.assertEqual(revisadas, 1)
+        self.assertIn("https://x.com/v", main.cargar_verificado())
+        _, revisadas_otra_vez = verificar.verificar_ofertas(
+            main.cargar_config(), obtener_fn=obtener_fn)
+        self.assertEqual(revisadas_otra_vez, 0)
+        self.assertEqual(len(llamadas), 1)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ import re
 import urllib.parse
 
 from .comun import fetch, pausar
+from consultas import consultas
 
 BASE = "https://cr.computrabajo.com"
 PATRON = re.compile(r'href="(/ofertas-de-trabajo/oferta-de-trabajo-de-[^"#]+)')
@@ -29,7 +30,7 @@ def buscar(cfg):
     vistas = set()
     pausa = cfg.get("pausa_segundos", 0.7)
     paginas = int(cfg.get("max_paginas_por_busqueda", 1))
-    for consulta in cfg.get("palabras_clave_busqueda", []):
+    for consulta in consultas(cfg, "Computrabajo"):
         slug = urllib.parse.quote(consulta.strip().replace(" ", "-"))
         for pagina in range(1, paginas + 1):
             url = f"{BASE}/trabajo-de-{slug}"

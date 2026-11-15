@@ -7,15 +7,28 @@ on:
 jobs:
   pruebas:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12", "3.14"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
+
+      - name: Instalar herramientas de desarrollo
+        run: python -m pip install --disable-pip-version-check ruff coverage
+
+      - name: Revisar errores de estilo
+        run: python -m ruff check buscador tests
 
       - name: Compilar todo el codigo
         run: python -m compileall buscador tests
 
-      - name: Correr pruebas unitarias
-        run: python -m unittest discover -s tests -v
+      - name: Correr pruebas con cobertura
+        run: python -m coverage run -m unittest discover -s tests -v
+
+      - name: Reporte de cobertura
+        run: python -m coverage report -m

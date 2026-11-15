@@ -16,8 +16,18 @@ sys.path.insert(0, BASE)
 if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
+import bloqueo
 from fuentes.comun import descargar, pausar
-from main import cargar_config, cargar_ofertas, eliminar_ofertas, registrar
+from main import (
+    DATA,
+    cargar_config,
+    cargar_ofertas,
+    cargar_verificado,
+    clave_url,
+    eliminar_ofertas,
+    guardar_verificado,
+    registrar,
+)
 
 # frases en minúsculas y sin tildes que indican que la oferta ya no existe
 MARCAS_CIERRE = [
@@ -116,41 +126,61 @@ def verificar_ofertas(cfg=None, obtener_fn=obtener):
 
     Recibe la configuración (o None para cargarla) y la función de descarga;
     devuelve (retiradas, revisadas), limitando a verificar_max_por_corrida.
+    Las ofertas ya revisadas hoy no se vuelven a descargar: dentro del cupo
+    se priorizan las verificadas hace mas tiempo (o nunca).
     """
     if cfg is None:
         cfg = cargar_config()
     hoy = datetime.now().strftime("%Y-%m-%d")
     maximo = int(cfg.get("verificar_max_por_corrida", 30))
     pausa = max(cfg.get("pausa_segundos", 0.7), 0.8)
-    candidatas = sorted(
-        (o for o in cargar_ofertas() if (o.get("fecha") or "") < hoy),
-        key=lambda o: o.get("fecha", ""),
-    )[:maximo]
+    verificado = cargar_verificado()
+
+    def fecha_verificado(oferta):
+        """Fecha de la ultima verificacion de la oferta ('' si nunca se reviso)."""
+        return verificado.get(clave_url(oferta.get("url", "")), "")
+
+    pendientes = [
+        o
+        for o in cargar_ofertas()
+        if (o.get("fecha") or "") < hoy and fecha_verificado(o) < hoy
+    ]
+    pendientes.sort(key=lambda o: (fecha_verificado(o), o.get("fecha", "")))
+    candidatas = pendientes[:maximo]
     retiradas = []
     revisadas = 0
     for o in candidatas:
         revisadas += 1
-        if estado_oferta(o, obtener_fn) == "cerrada":
+        estado = estado_oferta(o, obtener_fn)
+        if estado == "cerrada":
             retiradas.append(o)
+        elif estado == "viva":
+            verificado[clave_url(o.get("url", ""))] = hoy
         pausar(pausa)
     if retiradas:
         eliminar_ofertas([o.get("url", "") for o in retiradas])
         detalle = "; ".join(f"{o.get('titulo', '')[:40]} ({o.get('fuente', '')})" for o in retiradas)
         registrar(f"VERIFICACION cerradas={len(retiradas)} revisadas={revisadas}: {detalle}")
+    vigentes = {clave_url(o.get("url", "")) for o in cargar_ofertas()}
+    guardar_verificado({k: v for k, v in verificado.items() if k in vigentes})
     return retiradas, revisadas
 
 
 if __name__ == "__main__":
     try:
-        cfg = cargar_config()
-        retiradas, revisadas = verificar_ofertas(cfg)
-        print(f"Revisadas: {revisadas} | cerradas retiradas: {len(retiradas)}")
-        for o in retiradas:
-            print(f"  - {o.get('titulo', '')} ({o.get('fuente', '')})")
-        if retiradas and cfg.get("notificar_toast", True):
-            from notificar import toast
+        with bloqueo.proceso(DATA, "buscador"):
+            cfg = cargar_config()
+            retiradas, revisadas = verificar_ofertas(cfg)
+            print(f"Revisadas: {revisadas} | cerradas retiradas: {len(retiradas)}")
+            for o in retiradas:
+                print(f"  - {o.get('titulo', '')} ({o.get('fuente', '')})")
+            if retiradas and cfg.get("notificar_toast", True):
+                from notificar import toast
 
-            toast("Buscador de Puestos", f"{len(retiradas)} oferta(s) ya no disponibles retiradas")
+                toast(
+                    "Buscador de Puestos",
+                    f"{len(retiradas)} oferta(s) ya no disponibles retiradas",
+                )
     except Exception:
         import traceback
 
