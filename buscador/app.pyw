@@ -1241,7 +1241,8 @@ class Aplicacion:
             return
         dias = dias_de(oferta.get("fecha", ""), datetime_hoy())
         info = self.compat.get(clave_url(seleccion[0])) or {}
-        partes = [f"Fuente: {oferta.get('fuente') or '\u2014'}"]
+        fuente = oferta.get("fuente") or "\u2014"
+        partes = [f"Fuente: {fuente}"]
         if info.get("familia"):
             partes.append(f"Enfoque: {info['familia']}")
         if dias is not None:
