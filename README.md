@@ -51,6 +51,9 @@ ayuda a postular todos los días sin perder el seguimiento.
   **nunca** borra nada.
 - **Datos protegidos**: escrituras atomicas, bloqueo entre la app y la tarea
   programada, backups rotativos y clave SMTP cifrada con DPAPI de Windows.
+- **Fuentes resilientes**: reintentos con espera exponencial y circuit breaker
+  por host: un sitio caido deja de recibir intentos en la misma corrida en vez
+  de esperar timeouts en cada pagina, sin detener a las demas fuentes.
 - **Busqueda automatica diaria** opcional con el Programador de tareas de Windows,
   notificaciones de Windows y reporte HTML de solo lectura (con columna de enfoque).
 

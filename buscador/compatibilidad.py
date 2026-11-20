@@ -19,6 +19,7 @@ coincide dentro de otra palabra.
 import functools
 import re
 
+from compatibility_engine import AhoCorasickEngine
 from fuentes.comun import sin_acentos
 from puestos import FAMILIA_NINGUNA, clasificar
 
@@ -181,8 +182,30 @@ def _listas(cfg):
     }
 
 
+@functools.lru_cache(maxsize=128)
+def _motor(palabras):
+    """Automata Aho-Corasick de un grupo de palabras (se construye una vez).
+
+    'palabras' debe ser tupla (lo normaliza _grupo/_normalizar); el cache
+    evita reconstruir el automata en cada oferta puntuada.
+    """
+    return AhoCorasickEngine([(p, "candidatos") for p in palabras])
+
+
 def _coinciden(texto, palabras):
-    """Devuelve las palabras (normalizadas) cuyos patrones aparecen en el texto."""
+    """Devuelve las palabras (normalizadas) cuyos patrones aparecen en el texto.
+
+    Prefiltro Aho-Corasick: una sola pasada O(n+m) sobre el titulo decide si
+    hay algun candidato; si no lo hay, los N regex no pueden coincidir tampoco
+    y se saltan (caso comun al descartar un puesto). Si hay candidato, el
+    regex decide para conservar exactamente la semantica de palabra con
+    limite ("n1" no coincide dentro de "Fun1dad", "sr" no dentro de "sra").
+    """
+    if not palabras:
+        return []
+    candidatos = _motor(tuple(palabras)).search(str(texto)).get("candidatos")
+    if not candidatos:
+        return []
     return [p for p, patron in zip(palabras, _compilar(palabras)) if patron.search(texto)]
 
 

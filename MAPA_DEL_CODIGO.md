@@ -28,7 +28,7 @@ Léela con el README al lado: aquí está el **cómo**, allá el **qué**.
                     │ trabajo_org (8 pags)   │
                     │ findjob24h (buscador)  │
                     │ linkedin               │
-                    └────────────────────────┘
+                    └────────────────────────┘ reintentos + circuito por host
                                   │
                4. deduplicar (URL / titulo+empresa)
                5. escribir_csv (nuevas) ──► data/ofertas.csv
@@ -57,7 +57,8 @@ usuario ──► Abrir Ofertas.cmd ──► app.pyw (ventana Tkinter)
 | Archivo | Qué hace | Funciones clave |
 |---|---|---|
 | `main.py` | El cerebro: config, datos, filtros, meta diaria y la corrida completa | `main`, `normalizar_config`, `pasa_filtros`, `recolectar`, `deduplicar`, `postulaciones_hoy` |
-| `compatibilidad.py` | Puntúa cada oferta (0-100 %) contra el perfil y la clasifica | `puntuar`, `categoria_de` |
+| `compatibilidad.py` | Puntúa cada oferta (0-100 %) contra el perfil y la clasifica; el prefiltro Aho-Corasick descarta de una pasada los títulos sin candidatos | `puntuar`, `categoria_de`, `_coinciden` |
+| `compatibility_engine.py` | Motor Aho-Corasick: busca todas las palabras de un grupo en una sola pasada O(n+m), normalizando tildes y espacios | `AhoCorasickEngine.search`, `search_compatibility` |
 | `puestos.py` | Exige un ancla de TI en el título y etiqueta el enfoque (Soporte, Redes, Infraestructura, Campo, Aplicaciones, Seguridad) | `clasificar`, `familia_de`, `anclas` |
 | `consultas.py` | Catálogo de consultas: núcleo fijo + rotación diaria por fuente | `consultas` |
 | `app.pyw` | Ventana de escritorio; llama a las mismas funciones de `main` | `Aplicacion._construir`, `_leer_filtros`, `pintar`, `accion_*`, `_correr_hilo` |
@@ -67,12 +68,13 @@ usuario ──► Abrir Ofertas.cmd ──► app.pyw (ventana Tkinter)
 | `verificar.py` | Detecta ofertas cerradas y las retira (solo con evidencia); no repite las ya revisadas hoy | `obtener`, `estado_oferta`, `verificar_ofertas` |
 | `eliminar.py` | Borrado por terminal (menú o `--dias N`) | `purgar`, `menu`, `main` |
 | `notificar.py` | Toast de Windows y correo SMTP (opcional) | `toast`, `enviar_correo` |
-| `fuentes/comun.py` | Utilidades compartidas de descarga (reintentos y caché por corrida) | `descargar`, `fetch`, `pausar`, `sin_acentos`, `limpiar_cache` |
+| `fuentes/comun.py` | Utilidades compartidas de descarga (reintentos, caché por corrida y circuit breaker por host) | `descargar`, `fetch`, `pausar`, `sin_acentos`, `limpiar_cache` |
+| `fuentes/common.py` | Resiliencia reutilizable: reintentos con espera exponencial y circuit breaker | `CircuitBreaker`, `RetryPolicy`, `FuenteRobusta` |
 | `fuentes/computrabajo.py` | Busca en cr.computrabajo.com con las consultas de la corrida | `buscar` |
 | `fuentes/trabajo_org.py` | Recorre zonas y hasta 8 páginas, y guarda ubicación/empresa reales | `buscar` |
 | `fuentes/findjob24h.py` | Usa el buscador del sitio y lee título, empresa y ubicación del listado | `buscar` |
 | `fuentes/linkedin.py` | Endpoint público de invitados de LinkedIn | `buscar` |
-| `tests/` | Pruebas unitarias (unittest, sin instalar nada) | `test_main`, `test_verificar`, `test_app_helpers`, `test_compatibilidad`, `test_consultas`, `test_almacen`, `test_bloqueo`, `test_secretos` |
+| `tests/` | Pruebas unitarias (unittest, sin instalar nada) | `test_main`, `test_verificar`, `test_app_helpers`, `test_compatibilidad`, `test_consultas`, `test_almacen`, `test_bloqueo`, `test_secretos`, `test_compatibility_engine`, `test_common` |
 | `.github/workflows/ci.yml` | CI: ruff, compilación, pruebas y cobertura en Windows (3.10/3.12/3.14) | — |
 | `pyproject.toml` | Metadatos y configuración de ruff/cobertura | — |
 | `docs/` | Capturas de la aplicación que ves en el README | — |
@@ -171,7 +173,10 @@ las 4 sin importar de cuál venga cada oferta.
   en la columna **Enfoque**, en el filtro y en el reporte.
 - **Coincidencia**: raíces con límite de palabra ("informatic" = informática,
   "n1" no coincide dentro de "Fun1dad"); sin acentos; un concepto cuenta una sola
-  vez aunque aparezca en varios grupos.
+  vez aunque aparezca en varios grupos. Antes de evaluar los regex, el motor
+  Aho-Corasick (`compatibility_engine.py`) recorre el título una sola vez
+  O(n+m) y descarta al instante los que no traen ninguna palabra del perfil;
+  el regex sigue decidiendo la coincidencia exacta.
 
 ## Pruebas y CI
 
@@ -180,6 +185,8 @@ las 4 sin importar de cuál venga cada oferta.
   Computrabajo, estados, corrida), `test_app_helpers.py` (filtros de la ventana, orden,
   resumen, estadísticas, config parcial), `test_compatibilidad.py` (puntaje, anclas,
   familias, sectores mixtos, seniority y calibración con ofertas reales),
+  `test_compatibility_engine.py` (motor Aho-Corasick, prefiltro y límites de palabra),
+  `test_common.py` (circuit breaker, reintentos y circuito por host en `descargar`),
   `test_consultas.py` (rotación de consultas), `test_almacen.py` (atomicidad, backups,
   rotación), `test_bloqueo.py` (reentrada) y `test_secretos.py` (DPAPI). Todas
   redirigen rutas a un temporal: **nunca tocan tus datos reales**.

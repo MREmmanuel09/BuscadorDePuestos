@@ -4,7 +4,10 @@ import ssl
 import time
 import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
+
+from .common import CircuitBreaker, CircuitBreakerConfig
 
 UA = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
@@ -19,10 +22,33 @@ CTX = ssl.create_default_context()
 _CACHE = {}
 _CACHE_MAX = 300
 
+# Circuitos por host: tras N fallos seguidos el host deja de recibir
+# peticiones durante un rato (una fuente caida no gasta timeouts en cada
+# pagina de la corrida).
+_BREAKERS = {}
+_BREAKER_MAX_FALLOS = 3
+_BREAKER_VENTANA = 120.0
+
+
+def _breaker(url):
+    """Devuelve el circuito del host de 'url' (uno por host y por corrida)."""
+    host = urllib.parse.urlsplit(url).netloc
+    cb = _BREAKERS.get(host)
+    if cb is None:
+        cb = _BREAKERS[host] = CircuitBreaker(
+            CircuitBreakerConfig(
+                max_failures=_BREAKER_MAX_FALLOS,
+                duration_seconds=_BREAKER_VENTANA,
+            )
+        )
+    cb.reset()  # si ya paso la ventana, deja el circuito en half_open
+    return cb
+
 
 def limpiar_cache():
-    """Vacia la cache de paginas; se llama al iniciar cada corrida del buscador."""
+    """Vacia la cache de paginas y los circuitos; se llama al iniciar cada corrida."""
     _CACHE.clear()
+    _BREAKERS.clear()
 
 
 def descargar(url, timeout=30, intentos=3):
@@ -32,9 +58,19 @@ def descargar(url, timeout=30, intentos=3):
     timeouts, errores de red y respuestas 5xx; los 4xx se propagan de inmediato
     para no reintentar algo que no existe (p. ej. un 404). Dentro de una misma
     corrida, la misma URL se sirve de la cache.
+
+    Circuit breaker por host: si un host falla _BREAKER_MAX_FALLOS veces
+    seguidas, las siguientes URLs del mismo host fallan de inmediato durante
+    _BREAKER_VENTANA segundos en lugar de esperar timeouts completos.
     """
     if url in _CACHE:
         return _CACHE[url]
+
+    cb = _breaker(url)
+    if not cb.allow_request():
+        host = urllib.parse.urlsplit(url).netloc
+        raise RuntimeError(f"host bloqueado temporalmente (circuito abierto): {host}")
+
     ultimo_error = None
     for intento in range(1, intentos + 1):
         req = urllib.request.Request(url, headers=UA)
@@ -44,15 +80,19 @@ def descargar(url, timeout=30, intentos=3):
                 if len(_CACHE) >= _CACHE_MAX:
                     _CACHE.clear()
                 _CACHE[url] = resultado
+                cb.record_success()
                 return resultado
         except urllib.error.HTTPError as e:
             if 400 <= e.code < 500:
+                # El servidor responde: el host esta sano, solo la pagina no existe.
+                cb.record_success()
                 raise
             ultimo_error = e
         except (urllib.error.URLError, TimeoutError, OSError) as e:
             ultimo_error = e
         if intento < intentos:
             time.sleep(1.5 * intento)
+    cb.record_failure()
     raise ultimo_error
 
 
